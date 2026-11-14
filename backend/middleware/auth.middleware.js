@@ -1,17 +1,37 @@
-/**
- * Auth Middleware — STUB
- *
- * This file is a placeholder for the JWT authentication middleware that
- * will be implemented by Developer 1 (Auth + Profile module).
- */
+import jwt from "jsonwebtoken";
+
 export const protect = (req, res, next) => {
-  res.status(401);
-  next(
-    new Error(
-      "Authentication middleware not yet implemented. " +
-        "Developer 1 must implement JWT verification in middleware/auth.middleware.js."
-    )
-  );
+  try {
+    const token =
+      req.cookies?.token ||
+      (req.headers.authorization?.startsWith("Bearer ")
+        ? req.headers.authorization.split(" ")[1]
+        : null);
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is missing");
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    req.user = {
+      _id: decoded.userId,
+    };
+
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired token",
+    });
+  }
 };
 
 export default { protect };

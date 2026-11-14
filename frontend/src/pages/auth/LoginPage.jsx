@@ -9,30 +9,37 @@ import { Link, useNavigate } from "../../routes/Router";
 import { useAuth } from "../../context/AuthContext";
 
 export function LoginPage() {
-  const [email, setEmail] = useState("maya.chen@university.edu");
-  const [password, setPassword] = useState("••••••••");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim()) {
-      setError("Please enter your university email");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      await login(email, password);
-      navigate("/");
-    } catch {
-      setError("Failed to sign in. Please verify your credentials.");
-    } finally {
-      setLoading(false);
-    }
-  };
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  if (!email.trim() || !password.trim()) {
+    setError("Please enter email and password");
+    return;
+  }
+
+  setLoading(true);
+  setError("");
+
+  try {
+    await login(email, password);
+
+    // Navigate to dashboard after successful login
+    navigate("/dashboard");
+
+  } catch (error) {
+    console.error("Login error:", error);
+    setError(error.message || "Login failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <main className="auth-shell">

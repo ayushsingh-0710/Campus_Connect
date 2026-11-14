@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 
+import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import connectionRoutes from "./routes/connection.routes.js";
 import hackathonRoutes from "./routes/hackathonRoutes.js";
@@ -32,6 +33,8 @@ app.use(
       return callback(null, true); // Permissive in development
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -43,6 +46,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+app.use("/api/auth", authRoutes);               // Dev 1: Authentication & Profile
 app.use("/api/users", userRoutes);             // Dev 2: Student Discovery
 app.use("/api/connections", connectionRoutes); // Dev 2: Connection Requests
 app.use("/api/hackathons", hackathonRoutes);   // Dev 3: Hackathons Discovery & Synchronization
