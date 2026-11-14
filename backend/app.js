@@ -1,44 +1,40 @@
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 
+const authRoutes = require("./routes/auth.routes");
 const userRoutes = require("./routes/user.routes");
 const connectionRoutes = require("./routes/connection.routes");
+
 const notFound = require("./middleware/notFound.middleware");
 const errorHandler = require("./middleware/error.middleware");
 
 const app = express();
 
-// ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet());
 
-// ── CORS ──────────────────────────────────────────────────────────────────────
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: process.env.CLIENT_URL,
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// ── Cookie parsing ────────────────────────────────────────────────────────────
 app.use(cookieParser());
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-app.use("/api/users", userRoutes);           // Dev 2: Student Discovery
-app.use("/api/connections", connectionRoutes); // Dev 2: Connection Requests
+// Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/connections", connectionRoutes);
 
-// Developer 1: auth, users, profiles  → app.use("/api/auth",    authRoutes);
-// Developer 3: hackathons, teams      → app.use("/api/hackathons", hackathonRoutes);
-
-// ── 404 ───────────────────────────────────────────────────────────────────────
+// Error handling
 app.use(notFound);
-
-// ── Global error handler ──────────────────────────────────────────────────────
 app.use(errorHandler);
 
 module.exports = app;

@@ -1,50 +1,75 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import authService, { defaultUser } from "../services/authService";
 
-const AuthContext = createContext({
-  user: defaultUser,
-  isAuthenticated: true,
-  login: async () => defaultUser,
-  register: async () => defaultUser,
-  logout: () => {},
-  updateProfile: () => {},
-});
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+} from "react";
+
+import authService from "../services/authService";
+
+const AuthContext = createContext(null);
 
 export function useAuth() {
   return useContext(AuthContext);
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => authService.getCurrentUser());
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // Check existing login when app starts
   useEffect(() => {
-    const current = authService.getCurrentUser();
-    setUser(current);
+    const checkAuth = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+
+        setUser(currentUser);
+        setIsAuthenticated(true);
+      } catch {
+        setUser(null);
+        setIsAuthenticated(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
   const login = async (email, password) => {
-    const loggedIn = await authService.login(email, password);
-    setUser(loggedIn);
+    const loggedInUser = await authService.login(email, password);
+
+    setUser(loggedInUser);
     setIsAuthenticated(true);
-    return loggedIn;
+
+    return loggedInUser;
   };
 
   const register = async (data) => {
     const newUser = await authService.register(data);
+
     setUser(newUser);
     setIsAuthenticated(true);
+
     return newUser;
   };
 
-  const logout = () => {
-    authService.logout();
-    setIsAuthenticated(false);
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
+    }
   };
 
   const updateProfile = (data) => {
-    const updated = authService.updateCurrentUser(data);
-    setUser(updated);
+    setUser((previous) => ({
+      ...previous,
+      ...data,
+    }));
   };
 
   return (
@@ -52,6 +77,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         isAuthenticated,
+        loading,
         login,
         register,
         logout,

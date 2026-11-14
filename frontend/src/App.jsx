@@ -17,13 +17,14 @@ import TeamsPage from "./pages/teams/TeamsPage";
 import TeamDetailPage from "./pages/teams/TeamDetailPage";
 import ProfilePage from "./pages/profile/ProfilePage";
 
+
 function AppContent() {
   const { path } = useRouter();
 
-  // Auth pages do not have standard top navbar
   if (path === "/login") {
     return <LoginPage />;
   }
+
   if (path === "/register") {
     return <RegisterPage />;
   }
@@ -31,6 +32,7 @@ function AppContent() {
   return (
     <div className="app-shell">
       <Navbar />
+
       <Route path={ROUTES.HOME} element={<DashboardPage />} />
       <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
       <Route path={ROUTES.DISCOVER} element={<DiscoverPage />} />
@@ -44,6 +46,7 @@ function AppContent() {
     </div>
   );
 }
+
 
 export default function App() {
   return (

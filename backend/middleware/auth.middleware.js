@@ -1,29 +1,38 @@
-/**
- * Auth Middleware — STUB
- *
- * This file is a placeholder for the JWT authentication middleware that
- * will be implemented by Developer 1 (Auth + Profile module).
- *
- * CONTRACT for Dev 1:
- * - Verify the JWT from the Authorization header (Bearer <token>) or cookie.
- * - Attach the authenticated user object to `req.user` with at minimum:
- *     { _id: <ObjectId string>, email: <string> }
- * - Call next() on success.
- * - Call next(error) with a 401 error on failure.
- *
- * CURRENT BEHAVIOUR:
- * Returns 401 for every request so routes are properly protected even before
- * real auth is wired up. Replace the entire body of this function when
- * implementing JWT verification.
- */
+
+const jwt = require("jsonwebtoken");
+
 const protect = (req, res, next) => {
-  res.status(401);
-  next(
-    new Error(
-      "Authentication middleware not yet implemented. " +
-        "Developer 1 must implement JWT verification in middleware/auth.middleware.js."
-    )
-  );
+  try {
+    const token =
+      req.cookies?.token ||
+      (req.headers.authorization?.startsWith("Bearer ")
+        ? req.headers.authorization.split(" ")[1]
+        : null);
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is missing");
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    req.user = {
+      _id: decoded.userId,
+    };
+
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired token",
+    });
+  }
 };
 
 module.exports = { protect };
