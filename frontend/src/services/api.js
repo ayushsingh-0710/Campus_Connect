@@ -1,11 +1,12 @@
 import axios from "axios";
-import { authService } from "./authService";
+import { getStoredUser } from "./authService";
 
 /**
  * Campus Connect Core Axios Instance
  */
 export const api = axios.create({
   baseURL: "/api",
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -16,7 +17,7 @@ export const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     try {
-      const user = authService.getCurrentUser();
+      const user = getStoredUser();
       if (user?.id) {
         config.headers["x-user-id"] = user.id;
       }
