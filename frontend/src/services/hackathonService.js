@@ -1,48 +1,39 @@
+import hackathonAPI from "./hackathonAPI";
 import { hackathons } from "../data/hackathons";
 
-const HACKATHONS_STORAGE_KEY = "campus_connect_hackathons";
-
-function getStoredHackathons() {
-  try {
-    const raw = localStorage.getItem(HACKATHONS_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
-  return [...hackathons];
-}
-
-function saveStoredHackathons(items) {
-  try {
-    localStorage.setItem(HACKATHONS_STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    // ignore
-  }
-}
-
+/**
+ * Backward-compatible service wrapper bridging existing legacy calls
+ * to the new backend Hackathon API service.
+ */
 export const hackathonService = {
-  getAllHackathons() {
-    return Promise.resolve(getStoredHackathons());
+  async getAllHackathons() {
+    try {
+      const res = await hackathonAPI.getHackathons({ limit: 50 });
+      if (res.data && res.data.length > 0) return res.data;
+    } catch (e) {
+      console.warn("Falling back to local mock hackathons:", e.message);
+    }
+    return hackathons;
   },
 
-  getHackathonById(id) {
-    const items = getStoredHackathons();
-    const found = items.find((h) => h.id === id);
-    return Promise.resolve(found || items[0]);
+  async getHackathonById(id) {
+    try {
+      const res = await hackathonAPI.getHackathonDetails(id);
+      if (res.data) return res.data;
+    } catch (e) {
+      console.warn("Falling back to local mock hackathon detail:", e.message);
+    }
+    return hackathons.find((h) => h.id === id) || hackathons[0];
   },
 
-  toggleRegistration(id) {
-    const items = getStoredHackathons();
-    let updated;
-    const next = items.map((h) => {
-      if (h.id === id) {
-        updated = { ...h, registered: !h.registered };
-        return updated;
-      }
-      return h;
-    });
-    saveStoredHackathons(next);
-    return Promise.resolve(updated || items[0]);
+  async toggleRegistration(id) {
+    try {
+      const res = await hackathonAPI.bookmarkHackathon(id);
+      return res.data;
+    } catch (e) {
+      console.warn("Toggle registration error:", e.message);
+      return null;
+    }
   },
 };
 
