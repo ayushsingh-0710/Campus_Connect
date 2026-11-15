@@ -11,39 +11,98 @@ export function ConnectionsPage() {
   const [connections, setConnections] = useState([]);
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   const loadData = async () => {
     setLoading(true);
-    const [conns, reqs] = await Promise.all([
-      connectionService.getConnections(),
-      connectionService.getPendingRequests(),
-    ]);
-    setConnections(conns);
-    setPending(reqs);
-    setLoading(false);
+    setError(null);
+    try {
+      const [conns, reqs] = await Promise.all([
+        connectionService.getConnections(),
+        connectionService.getPendingRequests(),
+      ]);
+      setConnections(conns);
+      setPending(reqs);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to load connections.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const handleAccept = async (id) => {
-    await connectionService.acceptRequest(id);
-    await loadData();
+  const handleAccept = async (connectionId) => {
+    try {
+      await connectionService.acceptRequest(connectionId);
+      await loadData();
+    } catch (err) {
+      console.error("Accept failed:", err.response?.data?.message || err.message);
+    }
   };
 
-  const handleReject = async (id) => {
-    await connectionService.rejectRequest(id);
-    await loadData();
+  const handleReject = async (connectionId) => {
+    try {
+      await connectionService.rejectRequest(connectionId);
+      await loadData();
+    } catch (err) {
+      console.error("Reject failed:", err.response?.data?.message || err.message);
+    }
   };
 
-  const handleRemove = async (id) => {
-    await connectionService.removeConnection(id);
-    await loadData();
+  const handleRemove = async (connectionId) => {
+    try {
+      await connectionService.removeConnection(connectionId);
+      await loadData();
+    } catch (err) {
+      console.error("Remove failed:", err.response?.data?.message || err.message);
+    }
   };
 
-  const activeList = activeTab === "mine" ? connections : pending;
+  // Normalize connections list → ConnectionCard shape
+  // Accepted connections: { _id, connectedUser: { _id, fullName, ... } }
+  const normalizeConnection = (item) => {
+    const user = item.connectedUser || item.requester || item.recipient || {};
+    return {
+      id: item._id,
+      student: {
+        id: user._id || user.id,
+        name: user.fullName || user.name || "Student",
+        course: user.course || "",
+        campus: user.campus || "",
+        photo: user.profileImage || user.photo || null,
+        skills: user.skills || [],
+      },
+      status: "connected",
+      date: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "",
+    };
+  };
+
+  // Normalize pending requests → ConnectionCard shape
+  // Pending requests: { _id, requester: { _id, fullName, ... }, status: "pending" }
+  const normalizePending = (item) => {
+    const user = item.requester || {};
+    return {
+      id: item._id,
+      student: {
+        id: user._id || user.id,
+        name: user.fullName || user.name || "Student",
+        course: user.course || "",
+        campus: user.campus || "",
+        photo: user.profileImage || user.photo || null,
+        skills: user.skills || [],
+      },
+      status: "pending_incoming",
+      date: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "",
+    };
+  };
+
+  const normalizedConnections = connections.map(normalizeConnection);
+  const normalizedPending = pending.map(normalizePending);
+  const activeList = activeTab === "mine" ? normalizedConnections : normalizedPending;
 
   return (
     <PageContainer>
@@ -56,9 +115,13 @@ export function ConnectionsPage() {
       <ConnectionTabs
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        connectionsCount={connections.length + 38} // Figma baseline
-        pendingCount={pending.length}
+        connectionsCount={normalizedConnections.length}
+        pendingCount={normalizedPending.length}
       />
+
+      {error && (
+        <div className="text-red-500 text-sm py-4 text-center">{error}</div>
+      )}
 
       <div className="connection-list">
         {activeList.map((item) => (
@@ -73,7 +136,7 @@ export function ConnectionsPage() {
           />
         ))}
 
-        {!loading && activeList.length === 0 && (
+        {!loading && !error && activeList.length === 0 && (
           <EmptyState
             title={activeTab === "mine" ? "No connections yet" : "No pending requests"}
             description={

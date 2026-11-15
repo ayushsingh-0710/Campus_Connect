@@ -7,36 +7,48 @@ import { useNavigate } from "../../routes/Router";
 import connectionService from "../../services/connectionService";
 
 export function StudentCard({ student, onView, className = "" }) {
-  const [connected, setConnected] = useState(Boolean(student?.connected));
-  const [connecting, setConnecting] = useState(false);
+  const [requestState, setRequestState] = useState("idle"); // idle | sending | sent | error
   const navigate = useNavigate();
 
   const handleView = () => {
     if (onView) {
       onView();
     } else {
-      navigate(`/students/${student.id}`);
+      navigate(`/students/${student.id || student._id}`);
     }
   };
 
-  const handleConnectToggle = async () => {
-    setConnecting(true);
-    if (!connected) {
-      await connectionService.sendConnectionRequest(student);
-      setConnected(true);
-    } else {
-      await connectionService.removeConnection(student.id);
-      setConnected(false);
+  const handleConnect = async () => {
+    if (requestState !== "idle") return;
+    setRequestState("sending");
+    try {
+      // Send the MongoDB _id — not the whole student object
+      const recipientId = student._id || student.id;
+      await connectionService.sendConnectionRequest(recipientId);
+      setRequestState("sent");
+    } catch (err) {
+      const msg = err.response?.data?.message || "";
+      // If already connected or pending, treat as sent
+      if (msg.includes("already") || msg.includes("pending")) {
+        setRequestState("sent");
+      } else {
+        setRequestState("error");
+        // Reset after 3s so user can retry
+        setTimeout(() => setRequestState("idle"), 3000);
+      }
     }
-    setConnecting(false);
   };
+
+  const isSent = requestState === "sent";
+  const isSending = requestState === "sending";
+  const isError = requestState === "error";
 
   return (
     <article className={`card student-card ${className}`.trim()}>
       <div className="student-head cursor-pointer" onClick={handleView}>
-        <Avatar src={student.photo} name={student.name} />
+        <Avatar src={student.photo || student.profileImage} name={student.name || student.fullName} />
         <div>
-          <h3 className="hover:text-blue-600 transition-colors">{student.name}</h3>
+          <h3 className="hover:text-blue-600 transition-colors">{student.name || student.fullName}</h3>
           <p>
             {student.course} · {student.year}
           </p>
@@ -51,7 +63,7 @@ export function StudentCard({ student, onView, className = "" }) {
       <p className="student-bio line-clamp-3">{student.bio}</p>
 
       <div className="badge-row">
-        {student.skills.map((skill) => (
+        {(student.skills || []).map((skill) => (
           <Badge key={skill}>{skill}</Badge>
         ))}
       </div>
@@ -61,12 +73,13 @@ export function StudentCard({ student, onView, className = "" }) {
           View profile
         </Button>
         <Button
-          variant={connected ? "ghost" : "primary"}
-          icon={connected ? "check" : "plus"}
-          onClick={handleConnectToggle}
-          loading={connecting}
+          variant={isSent ? "ghost" : "primary"}
+          icon={isSent ? "check" : isError ? undefined : "plus"}
+          onClick={handleConnect}
+          loading={isSending}
+          disabled={isSent}
         >
-          {connected ? "Connected" : "Connect"}
+          {isSent ? "Requested" : isError ? "Try again" : "Connect"}
         </Button>
       </div>
     </article>

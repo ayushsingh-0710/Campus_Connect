@@ -1,78 +1,81 @@
-import { initialConnections } from "../data/connections";
+import api from "./api";
 
-const CONNECTIONS_STORAGE_KEY = "campus_connect_connections";
-
-function getStoredConnections() {
-  try {
-    const raw = localStorage.getItem(CONNECTIONS_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
-  return [...initialConnections];
-}
-
-function saveStoredConnections(items) {
-  try {
-    localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    // ignore
-  }
-}
-
+/**
+ * connectionService — wired to /api/connections/*
+ *
+ * Replaces the previous mock implementation that used localStorage.
+ * Uses the shared axios instance; Vite proxy forwards /api → http://localhost:5000.
+ *
+ * API shape from backend:
+ *   GET  /api/connections           → { success, connections: [{ _id, connectedUser, createdAt }] }
+ *   GET  /api/connections/received  → { success, requests: [{ _id, requester, recipient, status }] }
+ *   GET  /api/connections/sent      → { success, requests: [...] }
+ *   POST /api/connections/:id/request
+ *   PATCH /api/connections/:id/accept
+ *   PATCH /api/connections/:id/reject
+ *   DELETE /api/connections/:id
+ */
 export const connectionService = {
-  getConnections() {
-    const items = getStoredConnections();
-    return Promise.resolve(items.filter((i) => i.status === "connected"));
+  /**
+   * Get all accepted connections for the logged-in user.
+   * Returns array of { _id, connectedUser, createdAt }
+   */
+  async getConnections() {
+    const { data } = await api.get("/connections");
+    return data.connections || [];
   },
 
-  getPendingRequests() {
-    const items = getStoredConnections();
-    return Promise.resolve(items.filter((i) => i.status === "pending_incoming"));
+  /**
+   * Get pending incoming requests.
+   * Returns array of connection documents with populated `requester`.
+   */
+  async getPendingRequests() {
+    const { data } = await api.get("/connections/received");
+    return data.requests || [];
   },
 
-  acceptRequest(id) {
-    const items = getStoredConnections().map((item) => {
-      if (item.id === id || item.student.id === id) {
-        return { ...item, status: "connected", date: "Connected just now" };
-      }
-      return item;
-    });
-    saveStoredConnections(items);
-    return Promise.resolve(items);
+  /**
+   * Get outgoing requests sent by the logged-in user.
+   */
+  async getSentRequests() {
+    const { data } = await api.get("/connections/sent");
+    return data.requests || [];
   },
 
-  rejectRequest(id) {
-    const items = getStoredConnections().filter(
-      (item) => item.id !== id && item.student.id !== id
-    );
-    saveStoredConnections(items);
-    return Promise.resolve(items);
+  /**
+   * Send a connection request to a student.
+   * @param {string} recipientId - MongoDB _id of the recipient
+   */
+  async sendConnectionRequest(recipientId) {
+    const { data } = await api.post(`/connections/${recipientId}/request`);
+    return data.connection;
   },
 
-  removeConnection(id) {
-    const items = getStoredConnections().filter(
-      (item) => item.id !== id && item.student.id !== id
-    );
-    saveStoredConnections(items);
-    return Promise.resolve(items);
+  /**
+   * Accept a pending incoming request.
+   * @param {string} connectionId - MongoDB _id of the Connection document
+   */
+  async acceptRequest(connectionId) {
+    const { data } = await api.patch(`/connections/${connectionId}/accept`);
+    return data.connection;
   },
 
-  sendConnectionRequest(student) {
-    const items = getStoredConnections();
-    const existing = items.find((i) => i.student.id === student.id);
-    if (existing) {
-      return Promise.resolve(existing);
-    }
-    const newConn = {
-      id: `conn-${Date.now()}`,
-      student,
-      status: "pending_outgoing",
-      date: "Requested just now",
-    };
-    items.push(newConn);
-    saveStoredConnections(items);
-    return Promise.resolve(newConn);
+  /**
+   * Reject a pending incoming request.
+   * @param {string} connectionId - MongoDB _id of the Connection document
+   */
+  async rejectRequest(connectionId) {
+    const { data } = await api.patch(`/connections/${connectionId}/reject`);
+    return data.connection;
+  },
+
+  /**
+   * Remove an accepted connection.
+   * @param {string} connectionId - MongoDB _id of the Connection document
+   */
+  async removeConnection(connectionId) {
+    const { data } = await api.delete(`/connections/${connectionId}`);
+    return data;
   },
 };
 

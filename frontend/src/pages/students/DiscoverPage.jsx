@@ -1,13 +1,22 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import PageContainer from "../../components/layout/PageContainer";
 import SearchBar from "../../components/common/SearchBar";
 import StudentGrid from "../../components/students/StudentGrid";
 import EmptyState from "../../components/common/EmptyState";
-import { students } from "../../data/students";
+import studentService from "../../services/studentService";
 import { useNavigate } from "../../routes/Router";
+
+const FILTER_OPTIONS = {
+  Skills: ["React", "Python", "Figma", "Accessibility", "UX Research", "ML", "Node.js"],
+  Campus: ["North Campus", "City Campus", "West Campus"],
+  Course: ["Computer Science", "Product Design", "Data Science", "Business & Computing", "Cybersecurity"],
+  Year: [1, 2, 3, 4],
+};
 
 export function DiscoverPage() {
   const navigate = useNavigate();
+
+  // Filter state
   const [query, setQuery] = useState("");
   const [selectedSkill, setSelectedSkill] = useState(null);
   const [selectedCampus, setSelectedCampus] = useState(null);
@@ -15,49 +24,42 @@ export function DiscoverPage() {
   const [selectedYear, setSelectedYear] = useState(null);
   const [activeFilterDropdown, setActiveFilterDropdown] = useState(null);
 
-  // Available options
-  const filterOptions = {
-    Skills: ["React", "Python", "Figma", "Accessibility", "UX Research", "ML", "Node.js"],
-    Campus: ["North Campus", "City Campus", "West Campus"],
-    Course: ["Computer Science", "Product Design", "Data Science", "Business & Computing", "Cybersecurity"],
-    Year: ["1st year", "2nd year", "3rd year", "4th year"],
-    Interests: ["Climate technology", "Inclusive design", "Hackathons", "Fintech", "Assistive Tech"],
-  };
-
-  const filteredStudents = useMemo(() => {
-    return students.filter((student) => {
-      if (query.trim()) {
-        const q = query.toLowerCase();
-        const matchesName = student.name.toLowerCase().includes(q);
-        const matchesCourse = student.course.toLowerCase().includes(q);
-        const matchesCampus = student.campus.toLowerCase().includes(q);
-        const matchesSkills = student.skills.some((s) => s.toLowerCase().includes(q));
-        const matchesInterests = student.interests.some((i) => i.toLowerCase().includes(q));
-        if (!matchesName && !matchesCourse && !matchesCampus && !matchesSkills && !matchesInterests) {
-          return false;
-        }
-      }
-
-      if (selectedSkill && !student.skills.includes(selectedSkill)) {
-        return false;
-      }
-      if (selectedCampus && student.campus !== selectedCampus) {
-        return false;
-      }
-      if (selectedCourse && student.course !== selectedCourse) {
-        return false;
-      }
-      if (selectedYear && student.year !== selectedYear) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [query, selectedSkill, selectedCampus, selectedCourse, selectedYear]);
+  // Data state
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const hasActiveFilters = Boolean(
     query || selectedSkill || selectedCampus || selectedCourse || selectedYear
   );
+
+  // Fetch students from real API whenever filters change (debounced for search)
+  const fetchStudents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const filters = {};
+      if (query.trim())     filters.query   = query.trim();
+      if (selectedSkill)    filters.skill   = selectedSkill;
+      if (selectedCampus)   filters.campus  = selectedCampus;
+      if (selectedCourse)   filters.course  = selectedCourse;
+      if (selectedYear)     filters.year    = selectedYear;
+
+      const result = await studentService.searchStudents(filters);
+      setStudents(result);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to load students.");
+      setStudents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [query, selectedSkill, selectedCampus, selectedCourse, selectedYear]);
+
+  // Debounce search input; filters apply immediately
+  useEffect(() => {
+    const timer = setTimeout(fetchStudents, query ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [fetchStudents, query]);
 
   const clearAllFilters = () => {
     setQuery("");
@@ -71,6 +73,17 @@ export function DiscoverPage() {
   const toggleDropdown = (name) => {
     setActiveFilterDropdown(activeFilterDropdown === name ? null : name);
   };
+
+  // Normalize backend user shape to what StudentCard expects
+  const normalizeStudent = (s) => ({
+    ...s,
+    id: s._id || s.id,
+    name: s.fullName || s.name,
+    year: s.yearOfStudy ? `${s.yearOfStudy}${s.yearOfStudy === 1 ? "st" : s.yearOfStudy === 2 ? "nd" : s.yearOfStudy === 3 ? "rd" : "th"} year` : "",
+    photo: s.profileImage || s.photo || null,
+  });
+
+  const normalizedStudents = students.map(normalizeStudent);
 
   return (
     <PageContainer>
@@ -103,23 +116,15 @@ export function DiscoverPage() {
               <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-20 w-48">
                 <button
                   className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 rounded"
-                  onClick={() => {
-                    setSelectedSkill(null);
-                    setActiveFilterDropdown(null);
-                  }}
+                  onClick={() => { setSelectedSkill(null); setActiveFilterDropdown(null); }}
                 >
                   All Skills
                 </button>
-                {filterOptions.Skills.map((sk) => (
+                {FILTER_OPTIONS.Skills.map((sk) => (
                   <button
                     key={sk}
-                    className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${
-                      selectedSkill === sk ? "bg-blue-50 text-blue-600 font-semibold" : "hover:bg-slate-50"
-                    }`}
-                    onClick={() => {
-                      setSelectedSkill(sk);
-                      setActiveFilterDropdown(null);
-                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${selectedSkill === sk ? "bg-blue-50 text-blue-600 font-semibold" : "hover:bg-slate-50"}`}
+                    onClick={() => { setSelectedSkill(sk); setActiveFilterDropdown(null); }}
                   >
                     {sk}
                   </button>
@@ -142,23 +147,15 @@ export function DiscoverPage() {
               <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-20 w-48">
                 <button
                   className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 rounded"
-                  onClick={() => {
-                    setSelectedCampus(null);
-                    setActiveFilterDropdown(null);
-                  }}
+                  onClick={() => { setSelectedCampus(null); setActiveFilterDropdown(null); }}
                 >
                   All Campuses
                 </button>
-                {filterOptions.Campus.map((c) => (
+                {FILTER_OPTIONS.Campus.map((c) => (
                   <button
                     key={c}
-                    className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${
-                      selectedCampus === c ? "bg-blue-50 text-blue-600 font-semibold" : "hover:bg-slate-50"
-                    }`}
-                    onClick={() => {
-                      setSelectedCampus(c);
-                      setActiveFilterDropdown(null);
-                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${selectedCampus === c ? "bg-blue-50 text-blue-600 font-semibold" : "hover:bg-slate-50"}`}
+                    onClick={() => { setSelectedCampus(c); setActiveFilterDropdown(null); }}
                   >
                     {c}
                   </button>
@@ -181,23 +178,15 @@ export function DiscoverPage() {
               <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-20 w-56">
                 <button
                   className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 rounded"
-                  onClick={() => {
-                    setSelectedCourse(null);
-                    setActiveFilterDropdown(null);
-                  }}
+                  onClick={() => { setSelectedCourse(null); setActiveFilterDropdown(null); }}
                 >
                   All Courses
                 </button>
-                {filterOptions.Course.map((cr) => (
+                {FILTER_OPTIONS.Course.map((cr) => (
                   <button
                     key={cr}
-                    className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${
-                      selectedCourse === cr ? "bg-blue-50 text-blue-600 font-semibold" : "hover:bg-slate-50"
-                    }`}
-                    onClick={() => {
-                      setSelectedCourse(cr);
-                      setActiveFilterDropdown(null);
-                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${selectedCourse === cr ? "bg-blue-50 text-blue-600 font-semibold" : "hover:bg-slate-50"}`}
+                    onClick={() => { setSelectedCourse(cr); setActiveFilterDropdown(null); }}
                   >
                     {cr}
                   </button>
@@ -220,25 +209,17 @@ export function DiscoverPage() {
               <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-20 w-40">
                 <button
                   className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 rounded"
-                  onClick={() => {
-                    setSelectedYear(null);
-                    setActiveFilterDropdown(null);
-                  }}
+                  onClick={() => { setSelectedYear(null); setActiveFilterDropdown(null); }}
                 >
                   All Years
                 </button>
-                {filterOptions.Year.map((yr) => (
+                {FILTER_OPTIONS.Year.map((yr) => (
                   <button
                     key={yr}
-                    className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${
-                      selectedYear === yr ? "bg-blue-50 text-blue-600 font-semibold" : "hover:bg-slate-50"
-                    }`}
-                    onClick={() => {
-                      setSelectedYear(yr);
-                      setActiveFilterDropdown(null);
-                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${selectedYear === yr ? "bg-blue-50 text-blue-600 font-semibold" : "hover:bg-slate-50"}`}
+                    onClick={() => { setSelectedYear(yr); setActiveFilterDropdown(null); }}
                   >
-                    {yr}
+                    {yr}{yr === 1 ? "st" : yr === 2 ? "nd" : yr === 3 ? "rd" : "th"} year
                   </button>
                 ))}
               </div>
@@ -246,11 +227,7 @@ export function DiscoverPage() {
           </div>
 
           {hasActiveFilters && (
-            <button
-              type="button"
-              className="clear-filter"
-              onClick={clearAllFilters}
-            >
+            <button type="button" className="clear-filter" onClick={clearAllFilters}>
               Clear all
             </button>
           )}
@@ -259,14 +236,17 @@ export function DiscoverPage() {
 
       <div className="results-line">
         <strong>
-          {filteredStudents.length} {filteredStudents.length === 1 ? "student" : "students"}
+          {loading ? "…" : normalizedStudents.length}{" "}
+          {normalizedStudents.length === 1 ? "student" : "students"}
         </strong>
-        <span>
-          {hasActiveFilters ? "Filtered results" : "Recommended for you"}
-        </span>
+        <span>{hasActiveFilters ? "Filtered results" : "Recommended for you"}</span>
       </div>
 
-      {filteredStudents.length === 0 ? (
+      {error && (
+        <div className="text-red-500 text-sm py-4 text-center">{error}</div>
+      )}
+
+      {!loading && !error && normalizedStudents.length === 0 ? (
         <EmptyState
           title="No students found"
           description="Try adjusting your search terms or clearing filters to see more students from your campus."
@@ -275,8 +255,8 @@ export function DiscoverPage() {
         />
       ) : (
         <StudentGrid
-          students={filteredStudents}
-          onViewStudent={(s) => navigate(`/students/${s.id}`)}
+          students={normalizedStudents}
+          onViewStudent={(s) => navigate(`/students/${s.id || s._id}`)}
         />
       )}
     </PageContainer>

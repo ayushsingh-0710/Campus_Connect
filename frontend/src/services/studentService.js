@@ -1,64 +1,48 @@
-import { students } from "../data/students";
+import api from "./api";
 
+/**
+ * studentService — wired to GET /api/users and GET /api/users/:id
+ *
+ * Replaces the previous mock implementation that read from local data files.
+ * Uses the shared axios instance from api.js which handles cookies and
+ * the Vite proxy forwards /api → http://localhost:5000.
+ */
 export const studentService = {
-  getAllStudents() {
-    return Promise.resolve([...students]);
+  /**
+   * Fetch all public students (paginated).
+   * Returns { students, pagination }
+   */
+  async getAllStudents({ page = 1, limit = 50 } = {}) {
+    const { data } = await api.get("/users", { params: { page, limit } });
+    return data.students || [];
   },
 
-  getStudentById(id) {
-    const student = students.find((s) => s.id === id);
-    return Promise.resolve(student || students[0]);
+  /**
+   * Fetch a single public student profile by MongoDB _id.
+   */
+  async getStudentById(id) {
+    const { data } = await api.get(`/users/${id}`);
+    return data.student;
   },
 
-  searchStudents(filters = {}) {
-    let result = [...students];
+  /**
+   * Search and filter students.
+   * Maps the UI filter shape to the backend query params.
+   */
+  async searchStudents(filters = {}) {
+    const params = {};
 
-    if (filters.query) {
-      const q = filters.query.toLowerCase().trim();
-      result = result.filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) ||
-          s.course.toLowerCase().includes(q) ||
-          s.campus.toLowerCase().includes(q) ||
-          s.skills.some((sk) => sk.toLowerCase().includes(q)) ||
-          s.interests.some((it) => it.toLowerCase().includes(q))
-      );
-    }
+    if (filters.query?.trim())    params.search = filters.query.trim();
+    if (filters.campus?.trim())   params.campus = filters.campus.trim();
+    if (filters.course?.trim())   params.course = filters.course.trim();
+    if (filters.skill?.trim())    params.search = params.search || filters.skill.trim(); // skill goes via search
+    if (filters.interest?.trim()) params.search = params.search || filters.interest.trim();
+    if (filters.year)             params.year   = filters.year;
+    if (filters.page)             params.page   = filters.page;
+    if (filters.limit)            params.limit  = filters.limit;
 
-    if (filters.skill) {
-      const skillLower = filters.skill.toLowerCase();
-      result = result.filter((s) =>
-        s.skills.some((sk) => sk.toLowerCase().includes(skillLower))
-      );
-    }
-
-    if (filters.campus) {
-      result = result.filter((s) =>
-        s.campus.toLowerCase().includes(filters.campus.toLowerCase())
-      );
-    }
-
-    if (filters.course) {
-      result = result.filter((s) =>
-        s.course.toLowerCase().includes(filters.course.toLowerCase())
-      );
-    }
-
-    if (filters.year) {
-      result = result.filter((s) =>
-        s.year.toLowerCase().includes(filters.year.toLowerCase())
-      );
-    }
-
-    if (filters.interest) {
-      result = result.filter((s) =>
-        s.interests.some((i) =>
-          i.toLowerCase().includes(filters.interest.toLowerCase())
-        )
-      );
-    }
-
-    return Promise.resolve(result);
+    const { data } = await api.get("/users", { params });
+    return data.students || [];
   },
 };
 
